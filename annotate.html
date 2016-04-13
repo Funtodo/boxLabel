@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="stylesheet" href="http://annotorious.github.com/latest/annotorious.css" />
+    <script src=" http://annotorious.github.com/latest/annotorious.min.js"></script>
+    <script>
+    var openFile = function(event) {
+        var input = event.target;
+        var reader = new FileReader();
+        reader.onload = function(){
+            var dataURL = reader.result;
+            var output = document.getElementById('mainImage');
+            output.src = dataURL;
+            setTimeout(function(){
+                anno.reset();
+            }, 100);
+        };
+        reader.readAsDataURL(input.files[0]);
+    };
+
+    // prints 
+    function showBoxes(){
+        var myNode = document.getElementById("myList");
+        while (myNode.firstChild) {
+            myNode.removeChild(myNode.firstChild);
+        }
+            
+        var annoList = anno.getAnnotations();	//不能修改得到的annoList（这里annoList应该是引用或指针），修改annoList将会出错，不能继续注释
+        if (annoList.length == 0) return;
+        // copy object (for safety)
+        //annoList = JSON.parse(JSON.stringify(annoList));	//---由于此Json的src包含图像文件，则将图像太大且注释较多时，转换成的字符串会超过JS允许的最大字符串长度，出错
+        var width = document.getElementById("mainImage").width; 
+        var height = document.getElementById("mainImage").height; 
+        
+		//添加点额外的信息，图像名称，宽，高，标注个数
+		var fileName = document.getElementById("openImage").files[0].name;
+		var exnode = document.createElement("CODE");
+        var extextnode = document.createTextNode(fileName +","+ width +","+ height +","+ annoList.length);
+        exnode.appendChild(extextnode);
+        document.getElementById("myList").appendChild(exnode);
+        document.getElementById("myList").appendChild(document.createElement("BR"));
+		
+        // make all annotations have pixel coordinates
+		for (var ind = 0; ind < annoList.length; ind++){	//注意不能修改原数据 annoList
+            var curAnno = annoList[ind];		//同理curAnno，curGeom不能修改
+            var curGeom = curAnno.shapes[0].geometry;
+            // means not using pixel coordinates
+			var pxheight,pxwidth,pxx,pxy; 
+            if (curGeom.height < 1 || curGeom.width < 1){
+                pxheight = Math.round(curGeom.height * height);
+                pxwidth = Math.round(curGeom.width * width);
+                pxx = Math.round(curGeom.x * width);
+                pxy = Math.round(curGeom.y * height);
+            }
+            var xminStr = String(pxx);
+            var xmaxStr = String(pxx + pxwidth);
+            var yminStr = String(pxy);
+            var ymaxStr = String(pxy + pxheight);
+            var textStr = curAnno.text;
+            //console.log(curAnno);
+            //console.log(curGeom);
+            //curAnno.shapes[0].units = "pixels";
+            var node = document.createElement("CODE");
+            var brNode = document.createElement("BR");
+            var textnode = document.createTextNode(xminStr + "," + yminStr + "," + xmaxStr + "," + ymaxStr + "," + textStr);
+            node.appendChild(textnode);
+            document.getElementById("myList").appendChild(node);
+            document.getElementById("myList").appendChild(brNode);
+        }
+    }
+	
+	// save
+	function save_bx() {
+			//var content = document.getElementById('myList').innerHTML;
+			var listCode = document.getElementById('myList').getElementsByTagName("code");	//得到标注内容的数组
+			var fileName = document.getElementById("openImage").files[0].name;	//得到图片的名字，用作保存的txt文件名
+			fileName = fileName + ".txt";
+			//遍历myList，得到每一行的内容
+			var content = "";
+			for(var i=0;i<listCode.length;i++){
+				if(i==0)
+					content = listCode[i].innerHTML;
+				else
+					content = content + "\n" + listCode[i].innerHTML;
+			}
+			//保存内容
+			var aLink = document.getElementById("saveButton");
+			if ((navigator.userAgent.indexOf('MSIE') >= 0)	//IE,注释JS文件不支持
+					&& (navigator.userAgent.indexOf('Opera') < 0)
+					|| (!!window.ActiveXObject || "ActiveXObject" in window)
+					|| (navigator.userAgent.indexOf('Edge') >= 0)) {
+				//包括Microsoft IE和Microsoft Edge
+				document.execCommand('Saveas', false, 'c:\\' + fileName);
+			} //Firefox浏览器的支持--no
+			else if (navigator.userAgent.indexOf('Firefox') >= 0) {
+				var blob = new Blob([ content ]);
+				var evt = document.createEvent("HTMLEvents");
+				evt.initEvent("click", false, false);
+				aLink.download = fileName;
+				aLink.href = URL.createObjectURL(blob);
+				aLink.dispatchEvent(evt);
+				document.getElementById("saveButton").click();
+			}
+			//其他如Chrome（保存在桌面）和360浏览器(会弹框问保存的地方)的支持--Yes--
+			else {
+				var aLink = document.createElement('a');	//此处创建的元素必须是‘a’,dont know why
+				var blob = new Blob([ content ]);
+				var evt = document.createEvent("HTMLEvents");
+				evt.initEvent("click", false, false);
+				aLink.download = fileName;
+				aLink.href = URL.createObjectURL(blob);
+				aLink.dispatchEvent(evt);
+			}
+		}
+    </script>
+    <meta charset=utf-8 />
+    <title>for bounding box</title>
+    <!--[if IE]>
+    <script src="http://html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <style>
+        article, aside, figure, footer, header, hgroup, 
+        menu, nav, section { display: block; }
+    </style>
+</head>
+<body>
+    <span>选择图像==>标注(最好一次完全标注完)==>show boxes==>save boxes</span>
+	<br><span>左，上，右，下，label（没有为空）</span>
+	<br><br>
+	<input id="openImage" type='file' accept='image/*' onchange='openFile(event)' />
+    <div>
+		<br>
+        <button type="button" onclick="showBoxes()">Show boxes</button>
+		<br><br>
+		<button id="saveButton" type="button" onClick=save_bx()>Save boxes</button>
+		<br>
+    </div>
+    <br>
+    <!--<div>Select image, click and drag to select boxes, then click on 'Show Boxes' button.  <br>The coordinates and the labels of the selected boxes will be shown. 
+	Format: (name, xmin, ymin, xmax, ymax)</div>-->
+    <ul id="myList">
+    </ul>
+    </br>
+    <div >
+		<img class="annotatable" id="mainImage" src="#" alt="your image" />
+    </div>
+
+</body>
+</html>
